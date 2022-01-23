@@ -26,23 +26,20 @@ from keras.applications.inception_v3 import preprocess_input
 from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.sequence import pad_sequences
 
-# load doc into memory
+#The dataset used is the Flickr 8k image dataset
+#function to load captions
 def load_doc(filename):
-	# open the file as read only
 	file = open(filename, 'r')
-	# read all text
 	text = file.read()
-	# close the file
 	file.close()
 	return text
 
 filename = "image_captioning/captions.txt"
-# load descriptions
 doc = load_doc(filename)
 #print(doc[:500])
 
 
-
+#function to map image id to each of its 5 captions as a dict
 def load_descriptions(doc):
 	mapping = dict()
 	# process lines
@@ -60,21 +57,23 @@ def load_descriptions(doc):
 		# create the list if needed
 		if image_id not in mapping:
 			mapping[image_id] = list()
-		# store description
 		mapping[image_id].append(image_desc)
 	return mapping
 
-# parse descriptions
+# parse the captions
 descriptions = load_descriptions(doc)
 print('Loaded: %d ' % len(descriptions))
 
+#check out an example
 '''
 print(list(descriptions.keys())[:5])
 print(descriptions['1000268201_693b08cb0e'])
 '''
 
+
+#clean the caption data
 def clean_descriptions(descriptions):
-	# prepare translation table for removing punctuation
+
 	table = str.maketrans('', '', string.punctuation)
 	for key, desc_list in descriptions.items():
 		for i in range(len(desc_list)):
@@ -97,6 +96,7 @@ clean_descriptions(descriptions)
 
 #print(descriptions['1000268201_693b08cb0e'])
 
+#creating a vocabulary
 
 # convert the loaded descriptions into a vocabulary of words
 def to_vocabulary(descriptions):
@@ -127,7 +127,7 @@ save_descriptions(descriptions, 'descriptions.txt')
 
 
 
-# load a pre-defined list of photo identifiers
+# create a list of image ids
 def load_set(filename):
 	doc = load_doc(filename)
 	dataset = list()
@@ -152,7 +152,7 @@ images = 'image_captioning/Images/'
 img = glob.glob(images + '*.jpg')
 print(len(img))
 
-# Below file conatains the names of images to be used in train data
+# Below file contains the names of images to be used in train data
 train_images_file = 'image_captioning/text/Flickr_8k.trainImages.txt'
 # Read the train image names in a set
 train_images = set(open(train_images_file, 'r').read().strip().split('\n'))
@@ -166,9 +166,10 @@ for i in img: # img is list of full path names of all images
 
 print(len(train_img))
 
-# Below file conatains the names of images to be used in test data
+# Below file contains the names of images to be used in test data
 test_images_file = 'image_captioning/text/Flickr_8k.testImages.txt'
-# Read the validation image names in a set# Read the test image names in a set
+# Read the validation image names in a set
+# Read the test image names in a set
 test_images = set(open(test_images_file, 'r').read().strip().split('\n'))
 
 # Create a list of all the test images with their full path names
@@ -180,6 +181,7 @@ for i in img: # img is list of full path names of all images
 print(len(test_img))
 
 # load clean descriptions into memory
+#add a startseq and endseq to the beginning and ending of each caption respectively
 def load_clean_descriptions(filename, dataset):
 	# load document
 	doc = load_doc(filename)
@@ -230,8 +232,8 @@ def encode(image):
     fea_vec = np.reshape(fea_vec, fea_vec.shape[1]) # reshape from (1, 2048) to (2048, )
     return fea_vec
 
-# Call the funtion to encode all the train images
-# This will take a while on CPU - Execute this only once
+# Call the function to encode all the train images and store it as a pickle file
+
 '''
 start = time()
 encoding_train = {}
@@ -245,7 +247,7 @@ with open("image_captioning/encoded/encoded_train_images.pkl", "wb") as encoded_
 
 
 
-# Call the funtion to encode all the test images - Execute this only once
+# Call the function to encode all the test images 
 start = time()
 encoding_test = {}
 for img in test_img:
@@ -266,6 +268,7 @@ for key, val in train_descriptions.items():
         all_train_captions.append(cap)
 len(all_train_captions)
 
+#use only words that occur more than the word count threshold(10) in the vocabulary
 word_count_threshold = 10
 word_counts = {}
 nsents = 0
@@ -305,11 +308,11 @@ def max_length(descriptions):
 max_length = max_length(train_descriptions)
 print('Description Length: %d' % max_length)
 
-# data generator, intended to be used in a call to model.fit_generator()
+# data generator as dataset size is too large
 def data_generator(descriptions, photos, wordtoix, max_length, num_photos_per_batch):
     X1, X2, y = list(), list(), list()
     n=0
-    # loop for ever over images
+    # loop forever over images
     while 1:
         for key, desc_list in descriptions.items():
             n+=1
@@ -347,7 +350,7 @@ for line in f:
     coefs = np.asarray(values[1:], dtype='float32')
     embeddings_index[word] = coefs
 f.close()
-print('Found %s word vectors.' % len(embeddings_index))
+
 
 embedding_dim = 200
 
@@ -362,6 +365,8 @@ for word, i in wordtoix.items():
         embedding_matrix[i] = embedding_vector
 
 print(embedding_matrix.shape)
+
+#create the model
 
 inputs1 = Input(shape=(2048,))
 fe1 = Dropout(0.5)(inputs1)
@@ -379,7 +384,7 @@ model = Model(inputs=[inputs1, inputs2], outputs=outputs)
 
 model.summary()
 
-
+#set embedding layer weights and also as untrainable as the glove vectors are used there
 print(model.layers[2])
 
 model.layers[2].set_weights([embedding_matrix])
@@ -418,6 +423,7 @@ pred_model = tf.keras.models.load_model('./model_weights/model_try3_19.h5')
 with open("image_captioning/encoded/encoded_test_images.pkl", "rb") as encoded_pickle:
     encoding_test = load(encoded_pickle)
 
+#inference using greedy search algorithm
 def greedySearch(photo):
     in_text = 'startseq'
     for i in range(max_length):
@@ -438,7 +444,7 @@ def greedySearch(photo):
 
 
 
-
+#inference using beam search algorithm
 def beam_search_predictions(image, beam_index=3):
 	start = [wordtoix["startseq"]]
 	start_word = [[start, 0.0]]
