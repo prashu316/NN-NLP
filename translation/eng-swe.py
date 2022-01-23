@@ -1,3 +1,5 @@
+#importing all required libraries
+
 import pandas as pd
 import numpy as np
 import string
@@ -11,12 +13,13 @@ from sklearn.model_selection import train_test_split
 from keras.layers import Input, LSTM, Embedding, Dense
 from keras.models import Model
 
+#open text file as csv
 lines= pd.read_table('swe.txt',  names =['source', 'target', 'comments'])
+
 #print(lines.sample(6))
 
 #clean the sentences
-
-# convert source and target text to Lowercase
+#convert source and target text to Lowercase
 lines.source=lines.source.apply(lambda x: x.lower())
 lines.target=lines.target.apply(lambda x: x.lower())
 
@@ -47,45 +50,51 @@ lines.target = lines.target.apply(lambda x : 'START_ '+ x + ' _END')
 #print(lines.sample(6))
 
 # Find all the source and target words and sort them
-# Vocabulary of Source language
+# Vocabulary of Source language (english)
 all_source_words=set()
 for source in lines.source:
     for word in source.split():
         if word not in all_source_words:
-            all_source_words.add(word)# Vocabulary of Target
+            all_source_words.add(word)
+
+# Vocabulary of Target language (swedish)
 all_target_words=set()
 for target in lines.target:
     for word in target.split():
         if word not in all_target_words:
             all_target_words.add(word)
+
 # sort all unique source and target words
-source_words= sorted(list(all_source_words))
+source_words=sorted(list(all_source_words))
 target_words=sorted(list(all_target_words))
 
+'''
 print(source_words[:15])
 print(target_words[:15])
+'''
 
-#Find maximum sentence length in  the source and target data
+#Find maximum sentence length in the source and target data
 source_length_list=[]
 for l in lines.source:
     source_length_list.append(len(l.split(' ')))
 max_source_length= max(source_length_list)
-print(" Max length of the source sentence",max_source_length)
+#print("Max length of the source sentence",max_source_length)
 
 target_length_list=[]
 for l in lines.target:
     target_length_list.append(len(l.split(' ')))
 max_target_length= max(target_length_list)
-print(" Max length of the target sentence",max_target_length)
+#print(" Max length of the target sentence",max_target_length)
 
 # creating a word to index(word2idx) for source and target
-source_word2idx= dict([(word, i+1) for i,word in enumerate(source_words)])
+source_word2idx=dict([(word, i+1) for i,word in enumerate(source_words)])
 target_word2idx=dict([(word, i+1) for i, word in enumerate(target_words)])
 
 #creating a dictionary for index to word for source and target vocabulary
-source_idx2word= dict([(i, word) for word, i in  source_word2idx.items()])
+source_idx2word= dict([(i, word) for word, i in source_word2idx.items()])
 target_idx2word =dict([(i, word) for word, i in target_word2idx.items()])
-print(source_idx2word)
+
+#print(source_idx2word)
 
 #Shuffle the data
 lines = shuffle(lines)
@@ -95,16 +104,15 @@ X, y = lines.source, lines.target
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.1)
 print(X_train.shape, X_test.shape)
 
-#using fit_generator instead of fit as data is too large
 
 # Input tokens for encoder
 num_encoder_tokens=len(source_words)
 # Input tokens for decoder zero padded
 num_decoder_tokens=len(target_words) +1
 
-
+#using a generator to create batches as model.fit can't be used due to huge volume of data
 def generate_batch(X=X_train, y=y_train, batch_size=128):
-    ''' Generate a batch of data '''
+
     while True:
         for j in range(0, len(X), batch_size):
             encoder_input_data = np.zeros((batch_size, max_source_length), dtype='float32')
@@ -131,15 +139,17 @@ batch_size = 128
 epochs = 10
 latent_dim=256
 
-# Define an input sequence and process it.
+#Creating the model
+
+
 encoder_inputs = Input(shape=(None,))
 enc_emb =  Embedding(num_encoder_tokens+1, latent_dim, mask_zero=True)(encoder_inputs)
 encoder_lstm = LSTM(latent_dim, return_state=True)
 encoder_outputs, state_h, state_c = encoder_lstm(enc_emb)
-# We discard `encoder_outputs` and only keep the states.
+#retain only the states of the encoder
 encoder_states = [state_h, state_c]
 
-# Set up the decoder, using `encoder_states` as initial state.
+#use encoder states as initial states for decoder
 decoder_inputs = Input(shape=(None,))
 dec_emb_layer = Embedding(num_decoder_tokens+1, latent_dim, mask_zero = True)
 dec_emb = dec_emb_layer(decoder_inputs)
@@ -154,7 +164,7 @@ decoder_outputs = decoder_dense(decoder_outputs)
 
 
 
-
+#training model definition
 model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
 '''
 model.compile(optimizer='rmsprop',loss='categorical_crossentropy',metrics=['acc'])
@@ -165,7 +175,7 @@ model.fit_generator(generator = generate_batch(X_train, y_train, batch_size = ba
 '''
 
 
-
+#since my model was already trained, i reused weights of trained models for inference as well as training again
 new_model = tf.keras.models.load_model('swe_trans_train2.h5')
 #new_model.compile(optimizer='rmsprop',loss='categorical_crossentropy',metrics=['acc'])
 '''
@@ -175,8 +185,8 @@ new_model.fit_generator(generator = generate_batch(X_train, y_train, batch_size 
 
 new_model.save('swe_trans_train3.h5')
 '''
-# Encode the input sequence to get the "Context vectors"
-
+#building model for inference
+#load weights by name, important
 encoder_model = Model(encoder_inputs, encoder_states)
 weights_list = new_model.get_weights()
 print(len(weights_list))
@@ -201,6 +211,8 @@ decoder_model = Model(
     [decoder_inputs] + decoder_state_input,
     [decoder_outputs2] + decoder_states2)
 decoder_model.load_weights('swe_trans_train3.h5', by_name=True)
+
+#function to decode a random example from the dataset
 def decode_sequence(input_seq):
     # Encode the input as state vectors.
     states_value = encoder_model.predict(input_seq)
