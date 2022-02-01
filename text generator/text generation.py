@@ -84,15 +84,22 @@ def create_model():
 
 batch_size = 128
 
+dataset = tf.keras.utils.get_file(
+    fname="aclImdb.tar.gz",
+    origin="http://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz",
+    extract=True,
+    untar=True
+)
+
 # The dataset contains each review in a separate text file
 # The text files are present in four different folders
 # Create a list all files
 filenames = []
 directories = [
-    "aclImdb/train/pos",
-    "aclImdb/train/neg",
-    "aclImdb/test/pos",
-    "aclImdb/test/neg",
+    dataset + "/train/pos",
+    dataset + "/train/neg",
+    dataset + "/test/pos",
+    dataset + "/test/neg",
 ]
 for dir in directories:
     for f in os.listdir(dir):
