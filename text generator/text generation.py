@@ -8,6 +8,7 @@ import re
 import string
 import random
 from keras.layers import TextVectorization
+import pathlib
 def causal_attention_mask(batch_size, n_dest, n_src, dtype):
 
     i = tf.range(n_dest)[:, None]
@@ -91,6 +92,7 @@ dataset = tf.keras.utils.get_file(
     untar=True
 )
 
+
 # The dataset contains each review in a separate text file
 # The text files are present in four different folders
 # Create a list all files
@@ -101,6 +103,8 @@ directories = [
     dataset + "/test/pos",
     dataset + "/test/neg",
 ]
+
+
 for dir in directories:
     for f in os.listdir(dir):
         filenames.append(os.path.join(dir, f))
@@ -221,6 +225,6 @@ text_gen_callback = TextGenerator(num_tokens_generated, start_tokens, vocab)
 
 model = create_model()
 
-model.fit(text_ds, verbose=2, epochs=25, callbacks=[text_gen_callback])
+model.fit(text_ds, verbose=2, epochs=20, callbacks=[text_gen_callback])
 
-
+model.save("Textgen-1.h5")
