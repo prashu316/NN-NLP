@@ -110,7 +110,7 @@ def to_vocabulary(descriptions):
 vocabulary = to_vocabulary(descriptions)
 print('Original Vocabulary Size: %d' % len(vocabulary))
 
-# save descriptions to file, one per line
+# save descriptions to file, one per line, run only once
 '''
 def save_descriptions(descriptions, filename):
 	lines = list()
@@ -141,13 +141,14 @@ def load_set(filename):
 		dataset.append(identifier)
 	return set(dataset)
 
-# load training dataset (6K)
+# load training dataset
 filename = 'image_captioning/text/Flickr_8k.trainImages.txt'
 train = load_set(filename)
 print('Dataset: %d' % len(train))
 
 # Below path contains all the images
 images = 'image_captioning/Images/'
+
 # Create a list of all image names in the directory
 img = glob.glob(images + '*.jpg')
 print(len(img))
@@ -181,7 +182,7 @@ for i in img: # img is list of full path names of all images
 print(len(test_img))
 
 # load clean descriptions into memory
-#add a startseq and endseq to the beginning and ending of each caption respectively
+#add a startseq and endseq to the beginning and ending of each caption
 def load_clean_descriptions(filename, dataset):
 	# load document
 	doc = load_doc(filename)
@@ -207,7 +208,7 @@ train_descriptions = load_clean_descriptions('image_captioning/descriptions.txt'
 print('Descriptions: train=%d' % len(train_descriptions))
 
 def preprocess(image_path):
-    # Convert all the images to size 299x299 as expected by the inception v3 model
+    # Convert all the images to size 299x299 for the inception model
     img = image.load_img(image_path, target_size=(299, 299))
     # Convert PIL image to numpy array of 3-dimensions
     x = image.img_to_array(img)
@@ -232,7 +233,7 @@ def encode(image):
     fea_vec = np.reshape(fea_vec, fea_vec.shape[1]) # reshape from (1, 2048) to (2048, )
     return fea_vec
 
-# Call the function to encode all the train images and store it as a pickle file
+# Call the function to encode all the train images and store it as a pickle file, run it only once as it takes a lot of time
 
 '''
 start = time()
@@ -268,7 +269,7 @@ for key, val in train_descriptions.items():
         all_train_captions.append(cap)
 len(all_train_captions)
 
-#use only words that occur more than the word count threshold(10) in the vocabulary
+#use only words that occur more than the 10 times in the vocabulary
 word_count_threshold = 10
 word_counts = {}
 nsents = 0
@@ -399,7 +400,7 @@ number_pics_per_bath = 3
 steps = len(train_descriptions)//number_pics_per_bath
 
 
-
+#uncomment lines accordingly depending on whether a weights file is available
 '''
 for i in range(epochs):
     generator = data_generator(train_descriptions, train_features, wordtoix, max_length, number_pics_per_bath)
@@ -471,7 +472,7 @@ def beam_search_predictions(image, beam_index=3):
 	start_word = start_word[-1][0]
 	intermediate_caption = [ixtoword[i] for i in start_word]
 	final_caption = []
-
+	#break out of the loop if endseq has been reached
 	for i in intermediate_caption:
 		if i != 'endseq':
 			final_caption.append(i)
