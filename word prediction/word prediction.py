@@ -23,7 +23,7 @@ print("The Last Line: ", lines[-1])
 
 data = ""
 
-#store each word separately
+#store each word separately, the training set consists of words rather than sentences
 for i in lines:
     data = ' '.join(lines)
 
@@ -53,7 +53,7 @@ data = ' '.join(z)
 tokenizer = Tokenizer()
 tokenizer.fit_on_texts([data])
 
-# saving the tokenizer for predict function.
+# saving the tokenizer for predict function using pickle
 pickle.dump(tokenizer, open('tokenizer1.pkl', 'wb'))
 
 #convert words to number indices
