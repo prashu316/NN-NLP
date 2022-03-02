@@ -124,10 +124,10 @@ def generate_batch(X=X_train, y=y_train, batch_size=128):
                     if t < len(target_text.split()) - 1:
                         decoder_input_data[i, t] = target_word2idx[word]  # decoder input seq
                     if t > 0:
-                        # decoder target sequence (one hot encoded)
-                        # does not include the START_ token
+                        # decoder target sequence (1 hot encoded)
+
                         # Offset by one timestep
-                        # print(word)
+
                         decoder_target_data[i, t - 1, target_word2idx[word]] = 1.
 
             yield ([encoder_input_data, decoder_input_data], decoder_target_data)
@@ -141,7 +141,7 @@ latent_dim=256
 
 #Creating the model
 
-
+#shape is None because each input is of variable length
 encoder_inputs = Input(shape=(None,))
 enc_emb =  Embedding(num_encoder_tokens+1, latent_dim, mask_zero=True)(encoder_inputs)
 encoder_lstm = LSTM(latent_dim, return_state=True)
@@ -166,6 +166,8 @@ decoder_outputs = decoder_dense(decoder_outputs)
 
 #training model definition
 model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
+
+#uncomment the blocks accordingly when wanting to train anew
 '''
 model.compile(optimizer='rmsprop',loss='categorical_crossentropy',metrics=['acc'])
 
@@ -244,13 +246,13 @@ def decode_sequence(input_seq):
         states_value = [h, c]
     return decoded_sentence
 
-
+#testing the model on train/test dataset
 train_gen = generate_batch(X_train, y_train, batch_size = 1)
 k=-1
 k+=1
 (input_seq, actual_output), _ = next(train_gen)
 decoded_sentence = decode_sequence(input_seq)
 
-print('Input Source sentence:', X_train[k:k+1].values[0])
-print('Actual Target Translation:', y_train[k:k+1].values[0][6:-4])
-print('Predicted Target Translation:', decoded_sentence)
+print('Input Sentence:', X_train[k:k+1].values[0])
+print('Actual Translation:', y_train[k:k+1].values[0][6:-4])
+print('Predicted Translation:', decoded_sentence)
