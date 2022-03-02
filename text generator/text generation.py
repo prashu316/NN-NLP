@@ -76,6 +76,7 @@ def create_model():
     transformer_block = TransformerBlock(embed_dim, num_heads, feed_forward_dim)
     x = transformer_block(x)
     outputs = layers.Dense(vocab_size)(x)
+    #outputs include x too because it needs to get resampled to generate a complete review
     model = keras.Model(inputs=inputs, outputs=[outputs, x])
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     model.compile(
@@ -153,18 +154,14 @@ text_ds = text_ds.map(prepare_lm_inputs_labels)
 text_ds = text_ds.prefetch(tf.data.AUTOTUNE)
 
 class TextGenerator(keras.callbacks.Callback):
-    """A callback to generate text from a trained model.
+    '''
+
+    A custom callback to generate text from a trained model.
     1. Feed some starting prompt to the model
     2. Predict probabilities for the next token
     3. Sample the next token and add it to the next input
+    '''
 
-    Arguments:
-        max_tokens: Integer, the number of tokens to be generated after prompt.
-        start_tokens: List of integers, the token indices for the starting prompt.
-        index_to_word: List of strings, obtained from the TextVectorization layer.
-        top_k: Integer, sample from the `top_k` token predictions.
-        print_every: Integer, print after this many epochs.
-    """
 
     def __init__(
         self, max_tokens, start_tokens, index_to_word, top_k=10, print_every=1
