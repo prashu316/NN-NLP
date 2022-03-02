@@ -39,7 +39,7 @@ print(len(val), 'validation examples')
 #function to convert numpy object to tensor
 def df_to_dataset(dataframe, shuffle=True, batch_size=32):
   dataframe = dataframe.copy()
-  dataframe.pop('id')
+  dataframe.pop('id') #pop unwanted column
   labels = dataframe.pop('label')
   tweet=dataframe.pop('tweet')
   ds = tf.data.Dataset.from_tensor_slices((tweet, labels))
