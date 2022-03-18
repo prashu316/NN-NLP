@@ -728,6 +728,9 @@ def translate_unrolled(self,
     return {'text': result_text}
 Translator.translate = translate_unrolled
 
+
+#testing on sample input
+'''
 input_text = tf.constant([
     'i like tom',
     'where are you'
@@ -739,3 +742,13 @@ result = translator.translate(
 print(result['text'][0].numpy().decode())
 print(result['text'][1].numpy().decode())
 print()
+'''
+
+for inp , targ in dataset.take(1):
+    for i in range(1):
+        tf.expand_dims(inp,axis=0)
+        result=translator.translate(input_text=inp)
+
+        print("Input: ",inp[i].numpy().decode())
+        print("Actual Translation: ", targ[i].numpy().decode())
+        print("Prediction: ",result['text'][0].numpy().decode())
