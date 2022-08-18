@@ -8,26 +8,23 @@ from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.keras import losses
 import matplotlib.pyplot as plt
 
-#load dataset using pandas
-dataset_dir = os.path.join(os.getcwd(), 'train.csv')
+dataset_dir = os.path.join(os.getcwd(), 'lab4/train.csv')
 dataframe = pd.read_csv(dataset_dir)
 
 print(dataframe.head())
 
-#pop the unwanted column (id)
 train_ds=dataframe.copy()
 train_ds.pop('id')
 
 print(train_ds.head())
 
-#load test dataset
-dataset_dir1 = os.path.join(os.getcwd(), 'test.csv')
+dataset_dir1 = os.path.join(os.getcwd(), 'lab4/test.csv')
 dataframe1 = pd.read_csv(dataset_dir1)
 
 test_ds=dataframe1.copy()
 
 
-#create train validation split
+
 train, val = train_test_split(dataframe, test_size=0.2)
 print(len(train), 'train examples')
 print(len(val), 'validation examples')
@@ -36,15 +33,17 @@ print(len(val), 'validation examples')
 
 
 
-#function to convert numpy object to tensor
+#file to convert numpy object to tensor
+
+
 def df_to_dataset(dataframe, shuffle=True, batch_size=32):
   dataframe = dataframe.copy()
-  dataframe.pop('id') #pop unwanted column
+  dataframe.pop('id')
   labels = dataframe.pop('label')
   tweet=dataframe.pop('tweet')
   ds = tf.data.Dataset.from_tensor_slices((tweet, labels))
 
-#shuffle the data and batch it
+
   if shuffle:
     ds = ds.shuffle(buffer_size=len(dataframe))
   ds = ds.batch(batch_size)
@@ -52,7 +51,6 @@ def df_to_dataset(dataframe, shuffle=True, batch_size=32):
   return ds
 
 
-#separate function to convert test dataset to tensor and batch it
 def df_to_dataset1(dataframe, shuffle=True, batch_size=32):
   dataframe = dataframe.copy()
   dataframe.pop('id')
@@ -91,7 +89,6 @@ for text_batch, label_batch in train_ds.take(1):
 max_features = 5000
 sequence_length = 100
 
-#create a text vectorisation layer
 vectorize_layer = layers.TextVectorization(
     max_tokens=max_features,
     output_mode='int',
@@ -99,13 +96,11 @@ vectorize_layer = layers.TextVectorization(
 
 print(train_ds)
 
-#use a features only tensor in order to build the vocabulary use adapt function
 train_text = train_ds.map(lambda x, y: x)
 vectorize_layer.adapt(train_text)
 
 print(train_text)
 
-#function to vectorize text
 def vectorize_text(text, label):
   text = tf.expand_dims(text, -1)
   return vectorize_layer(text), label
@@ -131,6 +126,7 @@ print('Vocabulary size: {}'.format(len(vectorize_layer.get_vocabulary())))
 #apply the vectorize layer on all inputs
 train_ds = train_ds.map(vectorize_text)
 val_ds = val_ds.map(vectorize_text)
+
 test_ds = test_ds.map(vectorize_text1)
 
 #making reading of input file and making model more efficient
@@ -149,7 +145,7 @@ model = tf.keras.Sequential([
   layers.Embedding(max_features + 1, embedding_dim),
   layers.Dropout(0.2),
   layers.LSTM(128),
-  layers.Dropout(0.2),
+  layers.Dropout(0.4),
   layers.Dense(1)
 ])
 
@@ -162,18 +158,21 @@ model.compile(loss=losses.BinaryCrossentropy(from_logits=True),
 
 #training the model
 epochs = 10
+'''
 history = model.fit(
     train_ds,
     validation_data=val_ds,
     epochs=epochs,
 )
-
+'''
+'''
 loss, accuracy = model.evaluate(val_ds)
-
 print("Loss: ", loss)
 print("Accuracy: ", accuracy)
-
+'''
+#model.save_weights('Hate_Speech_20_epochs.h5')
 #the program stores a dictionary of everything that happened during training
+'''
 history_dict = history.history
 print(history_dict.keys())
 
@@ -203,10 +202,10 @@ plt.ylabel('Accuracy')
 plt.legend(loc='lower right')
 
 plt.show()
-
+'''
 
 #exporting model to work on raw strings, vectorize layer inside creating the model
-
+model.load_weights("Hate_Speech_20_epochs.h5")
 export_model = tf.keras.Sequential([
   vectorize_layer,
   model,
@@ -216,5 +215,21 @@ export_model = tf.keras.Sequential([
 export_model.compile(
     loss=losses.BinaryCrossentropy(from_logits=False), optimizer="adam", metrics=['accuracy']
 )
+
+examples = [
+  "I hate everyone and everything"
+]
+dataset_dir1 = os.path.join(os.getcwd(), 'lab4/test.csv')
+dataframe1 = pd.read_csv(dataset_dir1)
+test_ds=dataframe1.copy()
+tweet=dataframe1.pop('tweet')
+s_array = tweet.to_numpy()
+print(export_model.predict(examples))
+
+# Test it with `raw_test_ds`, which yields raw strings
+'''
+loss, accuracy = model.predict(test_ds)
+print(accuracy)
+'''
 
 
