@@ -7,7 +7,8 @@ from tensorflow.keras import layers
 from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.keras import losses
 import matplotlib.pyplot as plt
-
+import re
+import string
 dataset_dir = os.path.join(os.getcwd(), 'lab4/train.csv')
 dataframe = pd.read_csv(dataset_dir)
 
@@ -77,29 +78,32 @@ test_ds = df_to_dataset1(test_ds, batch_size=batch_size)
 
 
 
-#printing sample reviews
-for text_batch, label_batch in train_ds.take(1):
-  for i in range(3):
-    print("Review", text_batch.numpy()[i])
-    print("Label", label_batch.numpy()[i])
 
 
+
+def custom_standardization(input_data):
+  lowercase = tf.strings.lower(input_data)
+  stripped_html = tf.strings.regex_replace(lowercase, '<br />', ' ')
+  return tf.strings.regex_replace(stripped_html,
+                                  '[%s]' % re.escape(string.punctuation),
+                                  '')
 
 
 max_features = 5000
 sequence_length = 100
 
 vectorize_layer = layers.TextVectorization(
+    standardize=custom_standardization,
     max_tokens=max_features,
     output_mode='int',
     output_sequence_length=sequence_length)
 
-print(train_ds)
+#print(train_ds)
 
 train_text = train_ds.map(lambda x, y: x)
 vectorize_layer.adapt(train_text)
 
-print(train_text)
+#print(train_text)
 
 def vectorize_text(text, label):
   text = tf.expand_dims(text, -1)
@@ -126,8 +130,15 @@ print('Vocabulary size: {}'.format(len(vectorize_layer.get_vocabulary())))
 #apply the vectorize layer on all inputs
 train_ds = train_ds.map(vectorize_text)
 val_ds = val_ds.map(vectorize_text)
-
 test_ds = test_ds.map(vectorize_text1)
+
+#printing sample reviews
+for text_batch, label_batch in train_ds.take(1):
+  for i in range(3):
+    print("Review", text_batch.numpy()[i])
+    print("Label", label_batch.numpy()[i])
+
+
 
 #making reading of input file and making model more efficient
 AUTOTUNE = tf.data.AUTOTUNE
@@ -138,14 +149,15 @@ val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
 test_ds = test_ds.cache().prefetch(buffer_size=AUTOTUNE)
 
 #creating the model
-embedding_dim = 16
+embedding_dim = 64
 latent_dim=128
 model = tf.keras.Sequential([
 
-  layers.Embedding(max_features + 1, embedding_dim),
+  layers.Embedding(max_features + 1, embedding_dim ,mask_zero=True),
   layers.Dropout(0.2),
-  layers.LSTM(128),
+  layers.Bidirectional(tf.keras.layers.LSTM(64)),
   layers.Dropout(0.4),
+  layers.Dense(64, activation='relu'),
   layers.Dense(1)
 ])
 
@@ -158,21 +170,21 @@ model.compile(loss=losses.BinaryCrossentropy(from_logits=True),
 
 #training the model
 epochs = 10
-'''
+
 history = model.fit(
     train_ds,
     validation_data=val_ds,
     epochs=epochs,
 )
-'''
-'''
+
+
 loss, accuracy = model.evaluate(val_ds)
 print("Loss: ", loss)
 print("Accuracy: ", accuracy)
-'''
-#model.save_weights('Hate_Speech_20_epochs.h5')
+
+model.save_weights('Hate_Speech_20_epochs.h5')
 #the program stores a dictionary of everything that happened during training
-'''
+
 history_dict = history.history
 print(history_dict.keys())
 
@@ -202,29 +214,33 @@ plt.ylabel('Accuracy')
 plt.legend(loc='lower right')
 
 plt.show()
-'''
+
 
 #exporting model to work on raw strings, vectorize layer inside creating the model
-model.load_weights("Hate_Speech_20_epochs.h5")
+#model.load_weights("Hate_Speech_20_epochs.h5")
 export_model = tf.keras.Sequential([
   vectorize_layer,
-  model,
-  layers.Activation('sigmoid')
+  model
 ])
 
 export_model.compile(
     loss=losses.BinaryCrossentropy(from_logits=False), optimizer="adam", metrics=['accuracy']
 )
+sample_text = ['The movie was cool. The animation and the graphics '
+               'were out of this world. I would recommend this movie.',
+               'sounds like the exact opposite of clinton #trump #crookedhillary #omg #trumptrain #feelthebern   #dishonest #lol '
+               ,'trump real estate buddy carl paladino wishes obama dead of mad cow disease in 2017   ']
 
 examples = [
-  "I hate everyone and everything"
+  "I hate everyone and everything",
+  "The movie was great"
 ]
 dataset_dir1 = os.path.join(os.getcwd(), 'lab4/test.csv')
 dataframe1 = pd.read_csv(dataset_dir1)
 test_ds=dataframe1.copy()
 tweet=dataframe1.pop('tweet')
 s_array = tweet.to_numpy()
-print(export_model.predict(examples))
+print(export_model.predict(sample_text))
 
 # Test it with `raw_test_ds`, which yields raw strings
 '''
