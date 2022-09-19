@@ -14,7 +14,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-#from tensorflow.keras.layers import TextVectorization
+from tensorflow.keras.layers.experimental.preprocessing import TextVectorization
 
 
 lines= pd.read_table('swe.txt',  names =['inp', 'targ', 'comments'])
@@ -24,24 +24,42 @@ BUFFER_SIZE = len(lines.inp)
 BATCH_SIZE = 64
 max_vocab_size = 15000
 sequence_length = 20
+text_pairs = []
+with open('swe.txt') as f:
+    lines = f.read().split("\n")[:-1]
+text_pairs = []
+for line in lines:
+    eng, swe, ext = line.split("\t")
+    spa = "[start] " + swe + " [end]"
+    text_pairs.append((eng, spa))
+for _ in range(5):
+    print(random.choice(text_pairs))
 
-dataset = tf.data.Dataset.from_tensor_slices((lines.inp, lines.targ)).shuffle(BUFFER_SIZE)
-dataset = dataset.batch(BATCH_SIZE)
+random.shuffle(text_pairs)
+num_val_samples = int(0.15 * len(text_pairs))
+num_train_samples = len(text_pairs) - 2 * num_val_samples
+train_pairs = text_pairs[:num_train_samples]
+val_pairs = text_pairs[num_train_samples : num_train_samples + num_val_samples]
+test_pairs = text_pairs[num_train_samples + num_val_samples :]
 
-for example_input_batch, example_target_batch in dataset.take(1):
-  print(example_input_batch[:5])
-  print()
-  print(example_target_batch[:5])
-  break
+print(f"{len(text_pairs)} total pairs")
+print(f"{len(train_pairs)} training pairs")
+print(f"{len(val_pairs)} validation pairs")
+print(f"{len(test_pairs)} test pairs")
 
-#text preprocessing
-example_text = tf.constant('Jag börjar aldrig slåss')
+strip_chars = string.punctuation + "¿"
+strip_chars = strip_chars.replace("[", "")
+strip_chars = strip_chars.replace("]", "")
 
-print(example_text.numpy())
-print(tf_text.normalize_utf8(example_text, 'NFKD').numpy())
+vocab_size = 15000
+sequence_length = 20
+batch_size = 64
 
+
+def custom_standardization(input_string):
+    lowercase = tf.strings.lower(input_string)
+    return tf.strings.regex_replace(lowercase, "[%s]" % re.escape(strip_chars), "")
 def tf_lower_and_split_punct(text):
-
 
   text = tf.strings.lower(text)
   # Keep space, a to z, and select punctuation.
@@ -51,49 +69,49 @@ def tf_lower_and_split_punct(text):
   # Strip whitespace.
   text = tf.strings.strip(text)
 
-  text = tf.strings.join(['[START]', text, '[END]'], separator=' ')
+
   return text
 
-print(example_text.numpy().decode())
-print(tf_lower_and_split_punct(example_text).numpy().decode())
-
-#text vectorization
-
-
-
-#english
-input_text_processor = tf.keras.layers.TextVectorization(
-    standardize=tf_lower_and_split_punct,
-    max_tokens=max_vocab_size,
-    output_sequence_length=sequence_length
+eng_vectorization = TextVectorization(
+    max_tokens=vocab_size, output_mode="int", output_sequence_length=sequence_length,
 )
-
-#adapt english vocab
-input_text_processor.adapt(inp)
-print(input_text_processor.get_vocabulary()[:10])
-
-#swedish
-output_text_processor = tf.keras.layers.TextVectorization(
+swe_vectorization = TextVectorization(
+    max_tokens=vocab_size,
+    output_mode="int",
+    output_sequence_length=sequence_length + 1,
     standardize=tf_lower_and_split_punct,
-    max_tokens=max_vocab_size,
-    output_sequence_length=sequence_length+1
 )
+train_eng_texts = [pair[0] for pair in train_pairs]
+train_swe_texts = [pair[1] for pair in train_pairs]
+eng_vectorization.adapt(train_eng_texts)
+swe_vectorization.adapt(train_swe_texts)
 
-output_text_processor.adapt(targ)
-print(output_text_processor.get_vocabulary()[:10])
-
-#print token converted strings
-example_tokens = input_text_processor(example_input_batch)
-#print(example_tokens[:3, :10])
+def format_dataset(eng, swe):
+    eng = eng_vectorization(eng)
+    swe = swe_vectorization(swe)
+    return ({"encoder_inputs": eng, "decoder_inputs": swe[:, :-1],}, swe[:, 1:])
 
 
-#get vocab for conerting back to string
-input_vocab = np.array(input_text_processor.get_vocabulary())
-tokens = input_vocab[example_tokens[0].numpy()]
-print(' '.join(tokens))
+def make_dataset(pairs):
+    eng_texts, swe_texts = zip(*pairs)
+    eng_texts = list(eng_texts)
+    swe_texts = list(swe_texts)
+    dataset = tf.data.Dataset.from_tensor_slices((eng_texts, swe_texts))
+    dataset = dataset.batch(batch_size)
+    dataset = dataset.map(format_dataset)
+    return dataset.shuffle(2048).prefetch(16).cache()
 
-for inputs, targets in dataset.take(1):
-    print(inputs.shape,targets.shape)
+
+train_ds = make_dataset(train_pairs)
+val_ds = make_dataset(val_pairs)
+for inputs, targets in train_ds.take(1):
+    print(f'inputs["encoder_inputs"].shape: {inputs["encoder_inputs"].shape}')
+    print(f'inputs["decoder_inputs"].shape: {inputs["decoder_inputs"].shape}')
+    print(f"targets.shape: {targets.shape}")
+
+
+
+
 
 class TransformerEncoder(layers.Layer):
     def __init__(self, embed_dim, dense_dim, num_heads, **kwargs):
@@ -229,4 +247,32 @@ transformer.summary()
 transformer.compile(
     "rmsprop", loss="sparse_categorical_crossentropy", metrics=["accuracy"]
 )
-transformer.fit(dataset, epochs=epochs)
+#transformer.fit(train_ds, epochs=25,validation_data=val_ds)
+#transformer.save_weights("TRansformer_trans_epoch_25.h5")
+transformer.load_weights('TRansformer_trans_epoch_25.h5')
+swe_vocab = swe_vectorization.get_vocabulary()
+swe_index_lookup = dict(zip(range(len(swe_vocab)), swe_vocab))
+max_decoded_sentence_length = 20
+
+
+def decode_sequence(input_sentence):
+    tokenized_input_sentence = eng_vectorization([input_sentence])
+    decoded_sentence = "[start]"
+    for i in range(max_decoded_sentence_length):
+        tokenized_target_sentence = swe_vectorization([decoded_sentence])[:, :-1]
+        predictions = transformer([tokenized_input_sentence, tokenized_target_sentence])
+
+        sampled_token_index = np.argmax(predictions[0, i, :])
+        sampled_token = swe_index_lookup[sampled_token_index]
+        decoded_sentence += " " + sampled_token
+
+        if sampled_token == "end":
+            break
+    return decoded_sentence
+
+
+test_eng_texts = [pair[0] for pair in test_pairs]
+for _ in range(30):
+    input_sentence = random.choice(test_eng_texts)
+    translated = decode_sequence(input_sentence)
+    print(input_sentence, '=' , translated)
